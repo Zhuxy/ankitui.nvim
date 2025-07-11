@@ -1,0 +1,32 @@
+# Neovim
+.nvim/
+
+# Lua
+*.lua.c
+*.luac
+
+# AnkiTUI specific
+/lua/ankitui/ankitui.json
+/lua/ankitui/deck_config.json
+/lua/ankitui/ankitui_anki_connect.log
+
+# OS generated files
+.DS_Store
+.Trashes
+Thumbs.db
+
+# Package managers
+node_modules/
+
+# Build artifacts
+build/
+dist/
+
+# Logs
+*.log
+
+# Temporary files
+*~
+*.swp
+*.swo
+.bak

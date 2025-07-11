@@ -1,0 +1,139 @@
+*ankitui.nvim*	Neovim plugin for Anki card review.
+
+Author: Ian.Zhu <redilove@gmail.com>
+
+==============================================================================
+CONTENTS                                                *ankitui-contents*
+
+  1. Introduction.......................|ankitui-introduction|
+  2. Installation.......................|ankitui-installation|
+  3. Usage..............................|ankitui-usage|
+     3.1. Start Learning Session........|ankitui-start-learning|
+     3.2. Configuring Deck Fields.......|ankitui-configure-fields|
+     3.3. Reviewing Cards...............|ankitui-reviewing|
+     3.4. Exiting a Session.............|ankitui-exit-session|
+     3.5. Clearing Configuration........|ankitui-clear-config|
+  4. Commands...........................|ankitui-commands|
+  5. Troubleshooting....................|ankitui-troubleshooting|
+
+==============================================================================
+1. Introduction                                         *ankitui-introduction*
+
+ankitui.nvim is a Neovim plugin designed to integrate Anki card review directly
+into your editor workflow. It leverages AnkiConnect to fetch and update cards,
+allowing for a seamless and efficient learning experience without leaving
+Neovim.
+
+==============================================================================
+2. Installation                                         *ankitui-installation*
+
+This plugin requires Neovim version 0.7 or higher, a running Anki desktop
+application, the `curl` command-line tool, and the AnkiConnect add-on (Code: `2055492159`).
+
+Install with your preferred plugin manager. For |lazy.nvim|:
+
+>lua
+{
+  'Zhuxy/ankitui.nvim', -- Replace with your actual GitHub username and repo name
+  dependencies = {
+    'nvim-telescope/telescope.nvim', -- For deck and field selection
+    'folke/snacks.nvim', -- For floating windows
+  },
+  config = function()
+    -- Optional: Your AnkiTUI configuration here if any in the future
+  end
+}
+<end
+
+==============================================================================
+3. Usage                                                        *ankitui-usage*
+
+------------------------------------------------------------------------------
+3.1. Start Learning Session                             *ankitui-start-learning*
+
+To begin reviewing cards, execute the following Neovim command:
+
+:AnkiStartLearning
+
+This command will open a |telescope.nvim| picker, prompting you to select an
+Anki deck. If it's the first time you are reviewing cards from the chosen deck,
+you will be guided through a configuration process to define which fields
+constitute the "question" and "answer" parts of your cards.
+
+------------------------------------------------------------------------------
+3.2. Configuring Deck Fields                            *ankitui-configure-fields*
+
+When prompted to select fields for a new deck:
+
+- Use the `<Tab>` key to select multiple fields. The order in which you select
+  the fields determines their display order in the question or answer.
+- Press `<CR>` (Enter) to confirm your selection for the question fields.
+- You will then be prompted to select fields for the answer. Again, use `<Tab>`
+  for multiple selections and `<CR>` to confirm.
+
+Your field selections will be automatically saved to
+`stdpath('data')/ankitui/deck_config.json` for future sessions with that deck.
+
+------------------------------------------------------------------------------
+3.3. Reviewing Cards                                    *ankitui-reviewing*
+
+During a review session:
+
+- To toggle between the question and answer view, press `<Space>`.
+- After revealing the answer, rate the card's ease of recall using the number
+  keys:
+    - `1`: Again (lowest ease)
+    - `2`: Hard
+    - `3`: Good
+    - `4`: Easy (highest ease)
+
+Upon rating, the card's status will be updated in Anki, and the next card in
+your session will be automatically displayed.
+
+------------------------------------------------------------------------------
+3.4. Exiting a Session                                  *ankitui-exit-session*
+
+To terminate an active review session at any time, press `<ESC>`. A confirmation
+prompt will appear. Confirming will close the current card window and end the
+session.
+
+------------------------------------------------------------------------------
+3.5. Clearing Configuration                             *ankitui-clear-config*
+
+If you need to reset all previously saved deck configurations (e.g., due to
+changes in your Anki note types or a desire to reconfigure a deck from scratch),
+execute the following command:
+
+:AnkiClearConfig
+
+This will clear the `deck_config.json` file.
+
+==============================================================================
+4. Commands                                                     *ankitui-commands*
+
+These are the user commands provided by ankitui.nvim:
+
+:AnkiStartLearning
+	Starts a new Anki learning session. Opens a Telescope picker to select a deck.
+
+:AnkiClearConfig
+	Clears all saved deck configurations, allowing for fresh setup.
+
+==============================================================================
+5. Troubleshooting                                      *ankitui-troubleshooting*
+
+- *AnkiConnect connection issues*: If you encounter messages like "AnkiConnect
+  request failed", ensure that your Anki desktop application is running and
+  the AnkiConnect add-on is correctly installed and enabled. Check Anki's
+  console for any specific AnkiConnect error messages.
+
+- *No new cards*: If the plugin reports "No new cards found", verify that there
+  are indeed new cards available in the selected deck within Anki. The plugin
+  uses the standard `is:new` query to find cards.
+
+- *Floating window display problems*: Ensure that |rcarriga/nvim-snacks|
+  is properly installed and its dependencies are satisfied. Refer to its
+  documentation for further troubleshooting.
+
+
+vim: fdm=marker fenc=utf-8
