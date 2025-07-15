@@ -43,7 +43,20 @@ end
 function M.strip_html_tags(text)
   text = text:gsub("<br%s*/>", "\n")
   text = text:gsub("<br>", "\n")
+  text = text:gsub("<div>", "\n")
+  text = text:gsub("</div>", "")
   text = text:gsub("<[^>]+>", "")
+  return text
+end
+
+-- Helper function to decode HTML entities
+function M.decode_html_entities(text)
+  text = text:gsub("&nbsp;", " ")
+  text = text:gsub("&lt;", "<")
+  text = text:gsub("&gt;", ">")
+  text = text:gsub("&amp;", "&")
+  text = text:gsub("&quot;", "\"")
+  text = text:gsub("&#39;", "'")
   return text
 end
 
@@ -51,6 +64,7 @@ end
 function M.decode_unicode_escapes(text)
   return text:gsub("\\u(%x%x%x%x)", function(hex)
     return vim.fn.nr2char(tonumber(hex, 16))
+
   end)
 end
 
@@ -227,40 +241,89 @@ function M.show_next_card_in_session()
         table.insert(answer_parts, card_info.fields[field_name].value)
       end
       local answer_text = table.concat(answer_parts, "\n\n")
-      local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(question_text))
-      local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(answer_text))
+      local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
+      local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(answer_text)))
       M.show_question_in_float_window(card_id, cleaned_question, cleaned_answer)
     end,
   })
 end
 
 function M.start_review_session(deck_name, deck_config)
-  local find_cards_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "findCards", version = 6, params = { query = "deck:\"" .. deck_name .. "\" is:new" } }) }
-  local stdout = {}
-  vim.fn.jobstart(find_cards_command, {
-    on_stdout = function(_, data)
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" then
-          table.insert(stdout, chunk)
+  local all_card_ids = {}
+
+  local function fetch_cards(query, limit, callback)
+    local params = { query = query }
+    if limit then
+      params.limit = limit
+    end
+    local find_cards_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "findCards", version = 6, params = params }) }
+    local stdout = {}
+    vim.fn.jobstart(find_cards_command, {
+      on_stdout = function(_, data)
+        for _, chunk in ipairs(data) do
+          if chunk ~= "" then
+            table.insert(stdout, chunk)
+          end
         end
-      end
-    end,
-    on_exit = function(_, exit_code)
-      if exit_code ~= 0 then
-        vim.notify("AnkiConnect findCards failed.", vim.log.levels.ERROR)
-        return
-      end
-      local response = vim.fn.json_decode(table.concat(stdout))
-      if not response or not response.result or #response.result == 0 then
-        vim.notify("No new cards found in deck: " .. deck_name, vim.log.levels.INFO)
+      end,
+      on_exit = function(_, exit_code)
+        if exit_code ~= 0 then
+          vim.notify("AnkiConnect findCards failed for query: " .. query, vim.log.levels.ERROR)
+          callback()
+          return
+        end
+        local response_body = table.concat(stdout)
+        if response_body == "" then
+          callback()
+          return
+        end
+        local ok, response = pcall(vim.fn.json_decode, response_body)
+        if not ok then
+          vim.notify("AnkiConnect: Failed to decode JSON for findCards: " .. tostring(response), vim.log.levels.ERROR)
+          callback()
+          return
+        end
+        if response.error and response.error ~= vim.NIL then
+          vim.notify("AnkiConnect API error for findCards: " .. tostring(response.error), vim.log.levels.ERROR)
+          callback()
+          return
+        end
+        if response and response.result and type(response.result) == "table" then
+          for _, card_id in ipairs(response.result) do
+            table.insert(all_card_ids, card_id)
+          end
+        end
+        callback()
+      end,
+    })
+  end
+
+  local queries = {
+    string.format("deck:\"%s\" is:learn", deck_name),
+    string.format("deck:\"%s\" is:review is:due", deck_name),
+    string.format("deck:\"%s\" is:new", deck_name),
+  }
+
+  local function fetch_all_cards(index)
+    if index > #queries then
+      if #all_card_ids == 0 then
+        vim.notify("No cards to study in deck: " .. deck_name, vim.log.levels.INFO)
         return
       end
       M.current_session.deck_name = deck_name
       M.current_session.deck_config = deck_config
-      M.current_session.card_ids = shuffle_table(response.result)
+      M.current_session.card_ids = shuffle_table(all_card_ids)
       M.show_next_card_in_session()
-    end,
-  })
+      return
+    end
+
+    local limit = (queries[index]:find("is:new") and 20) or nil
+    fetch_cards(queries[index], limit, function()
+      fetch_all_cards(index + 1)
+    end)
+  end
+
+  fetch_all_cards(1)
 end
 
 function M.show_question_in_float_window(card_id, question_text, answer_text)
