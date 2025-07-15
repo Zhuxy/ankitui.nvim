@@ -248,6 +248,18 @@ function M.show_next_card_in_session()
   })
 end
 
+local function get_unique_cards(cards)
+  local seen = {}
+  local unique_cards = {}
+  for _, card_id in ipairs(cards) do
+    if not seen[card_id] then
+      table.insert(unique_cards, card_id)
+      seen[card_id] = true
+    end
+  end
+  return unique_cards
+end
+
 function M.start_review_session(deck_name, deck_config)
   local all_card_ids = {}
 
@@ -312,7 +324,7 @@ function M.start_review_session(deck_name, deck_config)
       end
       M.current_session.deck_name = deck_name
       M.current_session.deck_config = deck_config
-      M.current_session.card_ids = shuffle_table(all_card_ids)
+      M.current_session.card_ids = shuffle_table(get_unique_cards(all_card_ids))
       M.show_next_card_in_session()
       return
     end
