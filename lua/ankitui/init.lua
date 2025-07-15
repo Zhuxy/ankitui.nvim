@@ -329,7 +329,7 @@ function M.start_review_session(deck_name, deck_config)
       return
     end
 
-    local limit = (queries[index]:find("is:new") and 20) or nil
+    local limit = (queries[index]:find("is:new") and deck_config.new_cards_per_session) or nil
     fetch_cards(queries[index], limit, function()
       fetch_all_cards(index + 1)
     end)
