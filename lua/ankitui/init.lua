@@ -275,11 +275,8 @@ end
 function M.start_review_session(deck_name, deck_config)
   local all_card_ids = {}
 
-  local function fetch_cards(query, limit, callback)
+  local function fetch_cards(query, callback)
     local params = { query = query }
-    if limit then
-      params.limit = limit
-    end
     local find_cards_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "findCards", version = 6, params = params }) }
     local stdout = {}
     vim.fn.jobstart(find_cards_command, {
@@ -324,7 +321,7 @@ function M.start_review_session(deck_name, deck_config)
 
   local queries = {
     string.format("deck:\"%s\" is:learn", deck_name),
-    string.format("deck:\"%s\" is:review is:due", deck_name),
+    string.format("deck:\"%s\" is:review", deck_name),
     string.format("deck:\"%s\" is:new", deck_name),
   }
 
@@ -334,6 +331,24 @@ function M.start_review_session(deck_name, deck_config)
         vim.notify("No cards to study in deck: " .. deck_name, vim.log.levels.INFO)
         return
       end
+
+      local new_cards_query = string.format("deck:\"%s\" is:new", deck_name)
+      if queries[index - 1] == new_cards_query then
+        local new_cards = {}
+        for _, card_id in ipairs(all_card_ids) do
+          if vim.tbl_contains(M.current_session.card_ids, card_id) then
+            -- card is not new
+          else
+            table.insert(new_cards, card_id)
+          end
+        end
+        local limited_new_cards = {}
+        for i = 1, math.min(M.config.new_cards_per_session, #new_cards) do
+          table.insert(limited_new_cards, new_cards[i])
+        end
+        all_card_ids = vim.list_extend(M.current_session.card_ids, limited_new_cards)
+      end
+
       M.current_session.deck_name = deck_name
       M.current_session.deck_config = deck_config
       M.current_session.card_ids = shuffle_table(get_unique_cards(all_card_ids))
@@ -341,8 +356,7 @@ function M.start_review_session(deck_name, deck_config)
       return
     end
 
-    local limit = (queries[index]:find("is:new") and M.config.new_cards_per_session) or nil
-    fetch_cards(queries[index], limit, function()
+    fetch_cards(queries[index], function()
       fetch_all_cards(index + 1)
     end)
   end
