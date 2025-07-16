@@ -10,6 +10,15 @@ math.randomseed(os.time())
 
 local M = {}
 
+M.config = {
+  new_cards_per_session = 20,
+  log_to_file = false,
+}
+
+function M.setup(user_config)
+  M.config = vim.tbl_deep_extend("force", M.config, user_config or {})
+end
+
 -- Session state
 M.current_session = {
   deck_name = nil,
@@ -31,6 +40,9 @@ end
 
 -- Helper function for logging AnkiConnect calls
 function M.log_anki_connect_call(type, details)
+  if not M.config.log_to_file then
+    return
+  end
   local log_entry = os.date("%Y-%m-%d %H:%M:%S") .. " [" .. type .. "]\n"
   for k, v in pairs(details) do
     log_entry = log_entry .. "  " .. tostring(k) .. ": " .. tostring(v) .. "\n"
@@ -329,7 +341,7 @@ function M.start_review_session(deck_name, deck_config)
       return
     end
 
-    local limit = (queries[index]:find("is:new") and deck_config.new_cards_per_session) or nil
+    local limit = (queries[index]:find("is:new") and M.config.new_cards_per_session) or nil
     fetch_cards(queries[index], limit, function()
       fetch_all_cards(index + 1)
     end)
