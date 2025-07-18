@@ -320,9 +320,8 @@ function M.start_review_session(deck_name, deck_config)
   end
 
   local queries = {
-    string.format("deck:\"%s\" is:learn", deck_name),
-    string.format("deck:\"%s\" is:review", deck_name),
-    string.format("deck:\"%s\" is:new", deck_name),
+    string.format("deck:\"%s\"  (-\"is:review\" AND \"is:learn\")", deck_name), -- learning
+    string.format("deck:\"%s\" is:new", deck_name), -- new
   }
 
   local function fetch_all_cards(index)
