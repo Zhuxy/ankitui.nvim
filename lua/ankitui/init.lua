@@ -322,6 +322,7 @@ function M.start_review_session(deck_name, deck_config)
   local queries = {
     string.format("deck:\"%s\"  (-\"is:review\" AND \"is:learn\")", deck_name), -- learning
     string.format("deck:\"%s\" is:new", deck_name), -- new
+    string.format("deck:\"%s\" is:due", deck_name), -- due
   }
 
   local function fetch_all_cards(index)
@@ -371,15 +372,17 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
 
   local card = { id = card_id, question = question_text, answer = answer_text, showing_question = true }
   local win
+  local hint_win
 
-  local answer_lines = M.split_into_lines(card.answer)
-  table.insert(answer_lines, "")
-  table.insert(answer_lines, "1(again)  2(hard)  3(good)  4(easy)")
+  local hint_text = "1(again)  2(hard)  3(good)  4(easy)"
 
   local function handle_answer(ease)
     M.answer_cards({ { cardId = card.id, ease = ease } }, function(success)
       if success then
         win:close()
+        if hint_win then
+          hint_win:close()
+        end
         M.show_next_card_in_session()
       end
     end)
@@ -395,13 +398,13 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
     col = 0.1,
     focusable = true,
     zindex = 100,
-    wo ={
+    wo = {
       wrap = true,
     },
     keys = {
       ["<space>"] = function()
         if card.showing_question then
-          vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, answer_lines)
+          vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.answer))
           card.showing_question = false
         else
           vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.question))
@@ -416,6 +419,9 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
         local choice = vim.fn.confirm("Exit review session?", "&Yes\n&No", 2)
         if choice == 1 then
           win:close()
+          if hint_win then
+            hint_win:close()
+          end
           M.current_session = {
             deck_name = nil,
             deck_config = nil,
@@ -425,6 +431,18 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
         end
       end,
     },
+  })
+
+  hint_win = Snacks.win({
+    text = hint_text,
+    border = "rounded",
+    width = 0.8,
+    height = 3,
+    relative = "editor",
+    row = 0.7,
+    col = 0.1,
+    focusable = false,
+    zindex = 100,
   })
 end
 
