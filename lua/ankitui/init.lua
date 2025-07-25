@@ -1,4 +1,3 @@
-local telescope = require("telescope")
 local pickers = require("telescope.pickers")
 local finders = require("telescope.finders")
 local actions = require("telescope.actions")
@@ -255,7 +254,7 @@ function M.show_next_card_in_session()
       local answer_text = table.concat(answer_parts, "\n\n")
       local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
       local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(answer_text)))
-      M.show_question_in_float_window(card_id, cleaned_question, cleaned_answer)
+      M.show_question_in_float_window(card_id, card_info.note, cleaned_question, cleaned_answer)
     end,
   })
 end
@@ -364,13 +363,109 @@ function M.start_review_session(deck_name, deck_config)
   fetch_all_cards(1)
 end
 
-function M.show_question_in_float_window(card_id, question_text, answer_text)
+function M.get_note_info(note_id, callback)
+  local notes_info_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "notesInfo", version = 6, params = { notes = { note_id } } }) }
+  local stdout = {}
+  vim.fn.jobstart(notes_info_command, {
+    on_stdout = function(_, data)
+      for _, chunk in ipairs(data) do
+        if chunk ~= "" then
+          table.insert(stdout, chunk)
+        end
+      end
+    end,
+    on_exit = function(_, exit_code)
+      if exit_code ~= 0 then
+        vim.notify("AnkiConnect notesInfo failed.", vim.log.levels.ERROR)
+        callback(nil)
+        return
+      end
+      local response = vim.fn.json_decode(table.concat(stdout))
+      if not response or not response.result or #response.result == 0 then
+        callback(nil)
+        return
+      end
+      callback(response.result[1])
+    end,
+  })
+end
+
+function M.update_note_fields(note_id, fields, callback)
+  local update_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "updateNoteFields", version = 6, params = { note = { id = note_id, fields = fields } } }) }
+  vim.fn.jobstart(update_command, {
+    on_exit = function(_, exit_code)
+      if exit_code == 0 then
+        vim.notify("Card updated successfully!", vim.log.levels.INFO)
+        callback(true)
+      else
+        vim.notify("AnkiConnect updateNoteFields failed.", vim.log.levels.ERROR)
+        callback(false)
+      end
+    end,
+  })
+end
+
+function M.set_save_and_close(fn)
+  M.save_and_close = fn
+end
+
+function M.show_edit_window(note_info)
+  local bufs = {}
+  local wins = {}
+  local field_keys = {}
+  for k, _ in pairs(note_info.fields) do
+    table.insert(field_keys, k)
+  end
+  table.sort(field_keys)
+
+  local win_height = math.floor(vim.o.lines * 0.8 / #field_keys)
+
+  local function save_and_close()
+    local new_fields = {}
+    for i, field_name in ipairs(field_keys) do
+      local lines = vim.api.nvim_buf_get_lines(bufs[i], 0, -1, false)
+      new_fields[field_name] = table.concat(lines, "\n")
+    end
+
+    M.update_note_fields(note_info.noteId, new_fields, function(success)
+      if success then
+        for _, win in ipairs(wins) do
+          vim.api.nvim_win_close(win, true)
+        end
+      end
+    end)
+  end
+
+  for i, field_name in ipairs(field_keys) do
+    local buf = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, M.split_into_lines(note_info.fields[field_name].value))
+    table.insert(bufs, buf)
+
+    local win = vim.api.nvim_open_win(buf, true, {
+      relative = "editor",
+      width = math.floor(vim.o.columns * 0.8),
+      height = win_height,
+      row = math.floor(vim.o.lines * 0.1) + (i - 1) * win_height,
+      col = math.floor(vim.o.columns * 0.1),
+      border = "rounded",
+      title = field_name,
+      zindex = 101,
+    })
+    table.insert(wins, win)
+    vim.api.nvim_buf_set_keymap(buf, "n", "<leader>s", ":lua require('ankitui').save_and_close()<CR>", { noremap = true, silent = true })
+  end
+
+  M.set_save_and_close(save_and_close)
+end
+
+
+function M.show_question_in_float_window(card_id, note_id, question_text, answer_text)
   if not Snacks then
     vim.notify("Error: snacks.nvim is not loaded.", vim.log.levels.ERROR)
     return
   end
 
-  local card = { id = card_id, question = question_text, answer = answer_text, showing_question = true }
+  local card = { id = card_id, note_id = note_id, question = question_text, answer = answer_text, showing_question = true }
   local win
   local hint_win
 
@@ -402,6 +497,15 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
       wrap = true,
     },
     keys = {
+      ["e"] = function()
+        if not card.showing_question then
+          M.get_note_info(card.note_id, function(note_info)
+            if note_info then
+              M.show_edit_window(note_info)
+            end
+          end)
+        end
+      end,
       ["<space>"] = function()
         if card.showing_question then
           vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.answer))
@@ -416,7 +520,7 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
       ["3"] = function() handle_answer(3) end,
       ["4"] = function() handle_answer(4) end,
       ["<esc>"] = function()
-        local choice = vim.fn.confirm("Exit review session?", "&Yes\n&No", 2)
+        local choice = vim.fn.confirm('Exit review session?', '&Yes\n&No', 2)
         if choice == 1 then
           win:close()
           if hint_win then
@@ -430,8 +534,9 @@ function M.show_question_in_float_window(card_id, question_text, answer_text)
           vim.notify("Review session ended.", vim.log.levels.INFO)
         end
       end,
-    },
+    }
   })
+
 
   hint_win = Snacks.win({
     text = hint_text,
@@ -516,7 +621,7 @@ function M.start_learning_flow()
       prompt_title = "Select Anki Deck",
       finder = finders.new_table({ results = decks, entry_maker = function(entry) return { value = entry, display = entry, ordinal = entry } end }),
       sorter = require("telescope.sorters").get_generic_fuzzy_sorter(),
-      attach_mappings = function(prompt_bufnr, map)
+      attach_mappings = function(prompt_bufnr, _)
         actions.select_default:replace(function()
           actions.close(prompt_bufnr)
           local selection = action_state.get_selected_entry()
