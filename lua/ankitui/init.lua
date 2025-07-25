@@ -422,7 +422,30 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
   end
   table.sort(field_keys)
 
-  local win_height = math.floor(vim.o.lines * 0.8 / #field_keys)
+  local win_heights = {}
+  local total_height = 0
+  local min_field_height = 5 -- Minimum lines for each field
+  local field_padding = 2 -- Lines between fields
+
+  for _, field_name in ipairs(field_keys) do
+    local content_lines = #M.split_into_lines(note_info.fields[field_name].value)
+    local height = math.max(min_field_height, content_lines + 4) -- +4 for padding/border
+    table.insert(win_heights, height)
+    total_height = total_height + height + field_padding
+  end
+
+  -- Adjust total height to fit within 80% of screen height
+  local max_total_height = math.floor(vim.o.lines * 0.8)
+  if total_height > max_total_height then
+    local scale_factor = max_total_height / total_height
+    total_height = 0
+    for i, height in ipairs(win_heights) do
+      win_heights[i] = math.max(min_field_height, math.floor(height * scale_factor))
+      total_height = total_height + win_heights[i] + field_padding
+    end
+  end
+
+  local current_row = math.floor(vim.o.lines * 0.1)
   local focused_win = nil
 
   local function save_and_close()
@@ -434,8 +457,8 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
 
     M.update_note_fields(note_info.noteId, new_fields, function(success)
       if success then
-        for _, win in ipairs(wins) do
-          vim.api.nvim_win_close(win, true)
+        for _, win_id in ipairs(wins) do
+          vim.api.nvim_win_close(win_id, true)
         end
         for _, buf in ipairs(bufs) do
           vim.api.nvim_buf_delete(buf, { force = true })
@@ -446,8 +469,8 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
   end
 
   local function cancel_and_close()
-    for _, win in ipairs(wins) do
-      vim.api.nvim_win_close(win, true)
+    for _, win_id in ipairs(wins) do
+      vim.api.nvim_win_close(win_id, true)
     end
     for _, buf in ipairs(bufs) do
       vim.api.nvim_buf_delete(buf, { force = true })
@@ -463,8 +486,8 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
     local win = vim.api.nvim_open_win(buf, true, {
       relative = "editor",
       width = math.floor(vim.o.columns * 0.8),
-      height = win_height,
-      row = math.floor(vim.o.lines * 0.1) + (i - 1) * win_height,
+      height = win_heights[i],
+      row = current_row,
       col = math.floor(vim.o.columns * 0.1),
       border = "rounded",
       title = field_name,
@@ -476,7 +499,22 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
     end
     vim.api.nvim_buf_set_keymap(buf, "n", "<leader>s", ":lua require('ankitui').save_and_close()<CR>", { noremap = true, silent = true })
     vim.api.nvim_buf_set_keymap(buf, "n", "q", ":lua require('ankitui').cancel_and_close()<CR>", { noremap = true, silent = true })
+    current_row = current_row + win_heights[i] + field_padding
   end
+
+  local hint_text = "<leader>s (Save) | q (Quit without saving)"
+  local hint_win = Snacks.win({
+    text = hint_text,
+    border = "rounded",
+    width = math.floor(vim.o.columns * 0.8),
+    height = 3,
+    relative = "editor",
+    row = current_row + 1,
+    col = math.floor(vim.o.columns * 0.1),
+    focusable = false,
+    zindex = 101,
+  })
+  table.insert(wins, hint_win.win)
 
   if focused_win then
     vim.api.nvim_set_current_win(focused_win)
