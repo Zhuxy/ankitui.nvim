@@ -71,6 +71,15 @@ Your selections will be saved for future sessions with that deck.
 
 After rating, the current card will be submitted to Anki, and the next card in your session will be displayed.
 
+### Editing Cards
+
+- **Initiate Edit**: While viewing the **answer** of a card, press `e` to open the edit interface.
+- **Edit Interface**: This will open multiple floating windows, one for each field of the note. The window corresponding to the answer field will be automatically focused.
+- **Save Changes**: In any edit window, press `<leader>s` to save all changes to Anki. The edit windows will close, and focus will return to the main review window.
+- **Quit Without Saving**: In any edit window, press `q` to close all edit windows without saving any changes. Focus will return to the main review window.
+
+
+
 ### Exiting a Session
 
 - **Exit Session**: Press `<ESC>` at any time during a review session. You will be prompted to confirm if you wish to end the session.
