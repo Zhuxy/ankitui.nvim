@@ -409,7 +409,11 @@ function M.set_save_and_close(fn)
   M.save_and_close = fn
 end
 
-function M.show_edit_window(note_info)
+function M.set_cancel_and_close(fn)
+  M.cancel_and_close = fn
+end
+
+function M.show_edit_window(note_info, focused_field, original_win_id)
   local bufs = {}
   local wins = {}
   local field_keys = {}
@@ -419,6 +423,7 @@ function M.show_edit_window(note_info)
   table.sort(field_keys)
 
   local win_height = math.floor(vim.o.lines * 0.8 / #field_keys)
+  local focused_win = nil
 
   local function save_and_close()
     local new_fields = {}
@@ -432,8 +437,22 @@ function M.show_edit_window(note_info)
         for _, win in ipairs(wins) do
           vim.api.nvim_win_close(win, true)
         end
+        for _, buf in ipairs(bufs) do
+          vim.api.nvim_buf_delete(buf, { force = true })
+        end
+        vim.api.nvim_set_current_win(original_win_id)
       end
     end)
+  end
+
+  local function cancel_and_close()
+    for _, win in ipairs(wins) do
+      vim.api.nvim_win_close(win, true)
+    end
+    for _, buf in ipairs(bufs) do
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+    vim.api.nvim_set_current_win(original_win_id)
   end
 
   for i, field_name in ipairs(field_keys) do
@@ -452,10 +471,19 @@ function M.show_edit_window(note_info)
       zindex = 101,
     })
     table.insert(wins, win)
+    if field_name == focused_field then
+      focused_win = win
+    end
     vim.api.nvim_buf_set_keymap(buf, "n", "<leader>s", ":lua require('ankitui').save_and_close()<CR>", { noremap = true, silent = true })
+    vim.api.nvim_buf_set_keymap(buf, "n", "q", ":lua require('ankitui').cancel_and_close()<CR>", { noremap = true, silent = true })
+  end
+
+  if focused_win then
+    vim.api.nvim_set_current_win(focused_win)
   end
 
   M.set_save_and_close(save_and_close)
+  M.set_cancel_and_close(cancel_and_close)
 end
 
 
@@ -501,7 +529,7 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
         if not card.showing_question then
           M.get_note_info(card.note_id, function(note_info)
             if note_info then
-              M.show_edit_window(note_info)
+              M.show_edit_window(note_info, M.current_session.deck_config.answer_fields[1], win.win)
             end
           end)
         end
