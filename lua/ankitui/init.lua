@@ -4,6 +4,7 @@ local actions = require("telescope.actions")
 local action_state = require("telescope.actions.state")
 local Snacks = require("snacks")
 local config = require("ankitui.config")
+local api = require("ankitui.api")
 
 math.randomseed(os.time())
 
@@ -89,128 +90,37 @@ function M.split_into_lines(text)
 end
 
 function M.get_deck_names(callback)
-  local command = {
-    "curl",
-    "-s",
-    "http://localhost:8765",
-    "-X",
-    "POST",
-    "-d",
-    '{"action": "deckNames", "version": 6}',
-  }
-  local stdout_chunks = {}
-  local stderr_chunks = {}
-  M.log_anki_connect_call("REQUEST", { action = "deckNames", command = table.concat(command, " ") })
-  vim.fn.jobstart(command, {
-    on_stdout = function(_, data)
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" then
-          table.insert(stdout_chunks, chunk)
-        end
-      end
-    end,
-    on_stderr = function(_, data)
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" then
-          table.insert(stderr_chunks, chunk)
-        end
-      end
-    end,
-    on_exit = function(_, exit_code)
-      local response_body = table.concat(stdout_chunks)
-      M.log_anki_connect_call("RESPONSE", { action = "deckNames", exit_code = exit_code, stdout = response_body, stderr = table.concat(stderr_chunks) })
-      if exit_code ~= 0 then
-        vim.notify("AnkiConnect request failed: " .. table.concat(stderr_chunks), vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-      if response_body == "" then
-        vim.notify("AnkiConnect request failed: Empty response.", vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-      local ok, decoded = pcall(vim.fn.json_decode, response_body)
-      if not ok then
-        vim.notify("AnkiConnect: Failed to decode JSON: " .. tostring(decoded), vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-      if decoded.error and decoded.error ~= vim.NIL then
-        vim.notify("AnkiConnect API error: " .. tostring(decoded.error), vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-      callback(decoded.result)
-    end,
-  })
+  api.send_request("deckNames", {}, callback)
 end
 
 function M.get_field_names(deck_name, callback)
-  local find_notes_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "findNotes", version = 6, params = { query = "deck:\"" .. deck_name .. "\"" } }) }
-  local stdout = {}
-  vim.fn.jobstart(find_notes_command, {
-    on_stdout = function(_, data)
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" then
-          table.insert(stdout, chunk)
-        end
-      end
-    end,
-    on_exit = function(_, exit_code)
-      if exit_code ~= 0 then
+  api.send_request("findNotes", { query = "deck:\"" .. deck_name .. "\"" }, function(notes)
+    if not notes or #notes == 0 then
+      callback(nil)
+      return
+    end
+
+    local note_id = notes[1]
+    api.send_request("notesInfo", { notes = { note_id } }, function(note_info_result)
+      if not note_info_result or #note_info_result == 0 then
         callback(nil)
         return
       end
-      local response = vim.fn.json_decode(table.concat(stdout))
-      if not response or not response.result or #response.result == 0 then
-        callback(nil)
-        return
+
+      local note_info = note_info_result[1]
+      local field_names = {}
+      for k, _ in pairs(note_info.fields) do
+        table.insert(field_names, k)
       end
-      local note_id = response.result[1]
-      local notes_info_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "notesInfo", version = 6, params = { notes = { note_id } } }) }
-      local info_stdout = {}
-      vim.fn.jobstart(notes_info_command, {
-        on_stdout = function(_, data)
-          for _, chunk in ipairs(data) do
-            if chunk ~= "" then
-              table.insert(info_stdout, chunk)
-            end
-          end
-        end,
-        on_exit = function(_, info_exit_code)
-          if info_exit_code ~= 0 then
-            callback(nil)
-            return
-          end
-          local note_info_response = vim.fn.json_decode(table.concat(info_stdout, "\n"))
-          if not note_info_response or not note_info_response.result or #note_info_response.result == 0 then
-            callback(nil)
-            return
-          end
-          local note_info = note_info_response.result[1]
-          local field_names = {}
-          for k, _ in pairs(note_info.fields) do
-            table.insert(field_names, k)
-          end
-          callback(field_names)
-        end,
-      })
-    end,
-  })
+      callback(field_names)
+    end)
+  end)
 end
 
 function M.answer_cards(answers, callback)
-  local command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "answerCards", version = 6, params = { answers = answers } }) }
-  vim.fn.jobstart(command, {
-    on_exit = function(_, exit_code)
-      if exit_code == 0 then
-        callback(true)
-      else
-        vim.notify("AnkiConnect answerCards failed.", vim.log.levels.ERROR)
-        callback(false)
-      end
-    end,
-  })
+  api.send_request("answerCards", { answers = answers }, function(result)
+    callback(result ~= nil)
+  end)
 end
 
 function M.show_next_card_in_session()
@@ -220,43 +130,27 @@ function M.show_next_card_in_session()
   end
 
   local card_id = table.remove(M.current_session.card_ids, 1)
+  api.send_request("cardsInfo", { cards = { card_id } }, function(card_info_result)
+    if not card_info_result or #card_info_result == 0 then
+      vim.notify("Failed to get card info for card ID: " .. card_id, vim.log.levels.ERROR)
+      return
+    end
 
-  local cards_info_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "cardsInfo", version = 6, params = { cards = { card_id } } }) }
-  local stdout = {}
-  vim.fn.jobstart(cards_info_command, {
-    on_stdout = function(_, data)
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" then
-          table.insert(stdout, chunk)
-        end
-      end
-    end,
-    on_exit = function(_, exit_code)
-      if exit_code ~= 0 then
-        vim.notify("AnkiConnect cardsInfo failed.", vim.log.levels.ERROR)
-        return
-      end
-      local card_info_response = vim.fn.json_decode(table.concat(stdout, "\n"))
-      if not card_info_response or not card_info_response.result or #card_info_response.result == 0 then
-        vim.notify("Failed to get card info for card ID: " .. card_id, vim.log.levels.ERROR)
-        return
-      end
-      local card_info = card_info_response.result[1]
-      local question_parts = {}
-      for _, field_name in ipairs(M.current_session.deck_config.question_fields) do
-        table.insert(question_parts, card_info.fields[field_name].value)
-      end
-      local question_text = table.concat(question_parts, "\n\n")
-      local answer_parts = {}
-      for _, field_name in ipairs(M.current_session.deck_config.answer_fields) do
-        table.insert(answer_parts, card_info.fields[field_name].value)
-      end
-      local answer_text = table.concat(answer_parts, "\n\n")
-      local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
-      local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(answer_text)))
-      M.show_question_in_float_window(card_id, card_info.note, cleaned_question, cleaned_answer)
-    end,
-  })
+    local card_info = card_info_result[1]
+    local question_parts = {}
+    for _, field_name in ipairs(M.current_session.deck_config.question_fields) do
+      table.insert(question_parts, card_info.fields[field_name].value)
+    end
+    local question_text = table.concat(question_parts, "\n\n")
+    local answer_parts = {}
+    for _, field_name in ipairs(M.current_session.deck_config.answer_fields) do
+      table.insert(answer_parts, card_info.fields[field_name].value)
+    end
+    local answer_text = table.concat(answer_parts, "\n\n")
+    local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
+    local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(answer_text)))
+    M.show_question_in_float_window(card_id, card_info.note, cleaned_question, cleaned_answer)
+  end)
 end
 
 local function get_unique_cards(cards)
@@ -275,53 +169,20 @@ function M.start_review_session(deck_name, deck_config)
   local all_card_ids = {}
 
   local function fetch_cards(query, callback)
-    local params = { query = query }
-    local find_cards_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "findCards", version = 6, params = params }) }
-    local stdout = {}
-    vim.fn.jobstart(find_cards_command, {
-      on_stdout = function(_, data)
-        for _, chunk in ipairs(data) do
-          if chunk ~= "" then
-            table.insert(stdout, chunk)
-          end
+    api.send_request("findCards", { query = query }, function(result)
+      if result and type(result) == "table" then
+        for _, card_id in ipairs(result) do
+          table.insert(all_card_ids, card_id)
         end
-      end,
-      on_exit = function(_, exit_code)
-        if exit_code ~= 0 then
-          vim.notify("AnkiConnect findCards failed for query: " .. query, vim.log.levels.ERROR)
-          callback()
-          return
-        end
-        local response_body = table.concat(stdout)
-        if response_body == "" then
-          callback()
-          return
-        end
-        local ok, response = pcall(vim.fn.json_decode, response_body)
-        if not ok then
-          vim.notify("AnkiConnect: Failed to decode JSON for findCards: " .. tostring(response), vim.log.levels.ERROR)
-          callback()
-          return
-        end
-        if response.error and response.error ~= vim.NIL then
-          vim.notify("AnkiConnect API error for findCards: " .. tostring(response.error), vim.log.levels.ERROR)
-          callback()
-          return
-        end
-        if response and response.result and type(response.result) == "table" then
-          for _, card_id in ipairs(response.result) do
-            table.insert(all_card_ids, card_id)
-          end
-        end
-        callback()
-      end,
-    })
+      end
+      callback()
+    end)
   end
 
   local queries = {
-    string.format("deck:\"%s\"  (-\"is:review\" AND \"is:learn\")", deck_name), -- learning
     string.format("deck:\"%s\" is:new", deck_name), -- new
-    string.format("deck:\"%s\" is:due", deck_name), -- due
+    string.format("deck:\"%s\" is:learn", deck_name), -- learning
+    string.format("deck:\"%s\" is:due -is:learn", deck_name), -- due
   }
 
   local function fetch_all_cards(index)
@@ -332,26 +193,25 @@ function M.start_review_session(deck_name, deck_config)
       end
 
       local new_cards_query = string.format("deck:\"%s\" is:new", deck_name)
-      if queries[index - 1] == new_cards_query then
-        local new_cards = {}
-        for _, card_id in ipairs(all_card_ids) do
-          if vim.tbl_contains(M.current_session.card_ids, card_id) then
-            -- card is not new
-          else
-            table.insert(new_cards, card_id)
-          end
-        end
+      api.send_request("findCards", { query = new_cards_query }, function(new_cards_result)
+        local new_cards = new_cards_result or {}
         local limited_new_cards = {}
         for i = 1, math.min(M.config.new_cards_per_session, #new_cards) do
           table.insert(limited_new_cards, new_cards[i])
         end
-        all_card_ids = vim.list_extend(M.current_session.card_ids, limited_new_cards)
-      end
 
-      M.current_session.deck_name = deck_name
-      M.current_session.deck_config = deck_config
-      M.current_session.card_ids = shuffle_table(get_unique_cards(all_card_ids))
-      M.show_next_card_in_session()
+        local other_cards = {}
+        for _, card_id in ipairs(all_card_ids) do
+          if not vim.tbl_contains(new_cards, card_id) then
+            table.insert(other_cards, card_id)
+          end
+        end
+
+        M.current_session.deck_name = deck_name
+        M.current_session.deck_config = deck_config
+        M.current_session.card_ids = shuffle_table(get_unique_cards(vim.list_extend(other_cards, limited_new_cards)))
+        M.show_next_card_in_session()
+      end)
       return
     end
 
@@ -364,45 +224,25 @@ function M.start_review_session(deck_name, deck_config)
 end
 
 function M.get_note_info(note_id, callback)
-  local notes_info_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "notesInfo", version = 6, params = { notes = { note_id } } }) }
-  local stdout = {}
-  vim.fn.jobstart(notes_info_command, {
-    on_stdout = function(_, data)
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" then
-          table.insert(stdout, chunk)
-        end
-      end
-    end,
-    on_exit = function(_, exit_code)
-      if exit_code ~= 0 then
-        vim.notify("AnkiConnect notesInfo failed.", vim.log.levels.ERROR)
-        callback(nil)
-        return
-      end
-      local response = vim.fn.json_decode(table.concat(stdout))
-      if not response or not response.result or #response.result == 0 then
-        callback(nil)
-        return
-      end
-      callback(response.result[1])
-    end,
-  })
+  api.send_request("notesInfo", { notes = { note_id } }, function(result)
+    if not result or #result == 0 then
+      callback(nil)
+      return
+    end
+    callback(result[1])
+  end)
 end
 
 function M.update_note_fields(note_id, fields, callback)
-  local update_command = { "curl", "-s", "http://localhost:8765", "-X", "POST", "-d", vim.fn.json_encode({ action = "updateNoteFields", version = 6, params = { note = { id = note_id, fields = fields } } }) }
-  vim.fn.jobstart(update_command, {
-    on_exit = function(_, exit_code)
-      if exit_code == 0 then
-        vim.notify("Card updated successfully!", vim.log.levels.INFO)
-        callback(true)
-      else
-        vim.notify("AnkiConnect updateNoteFields failed.", vim.log.levels.ERROR)
-        callback(false)
-      end
-    end,
-  })
+  api.send_request("updateNoteFields", { note = { id = note_id, fields = fields } }, function(result)
+    if result then
+      vim.notify("Card updated successfully!", vim.log.levels.INFO)
+      callback(true)
+    else
+      vim.notify("AnkiConnect updateNoteFields failed.", vim.log.levels.ERROR)
+      callback(false)
+    end
+  end)
 end
 
 function M.set_save_and_close(fn)
