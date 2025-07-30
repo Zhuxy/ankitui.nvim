@@ -11,7 +11,8 @@ math.randomseed(os.time())
 local M = {}
 
 M.config = {
-  new_cards_per_session = 20,
+  new_cards_per_session = 5,
+  max_cards_per_session = 20,
   log_to_file = false,
 }
 
@@ -207,9 +208,15 @@ function M.start_review_session(deck_name, deck_config)
           end
         end
 
+        local combined_cards = vim.list_extend(other_cards, limited_new_cards)
+        local final_cards = {}
+        for i = 1, math.min(M.config.max_cards_per_session, #combined_cards) do
+          table.insert(final_cards, combined_cards[i])
+        end
+
         M.current_session.deck_name = deck_name
         M.current_session.deck_config = deck_config
-        M.current_session.card_ids = shuffle_table(get_unique_cards(vim.list_extend(other_cards, limited_new_cards)))
+        M.current_session.card_ids = shuffle_table(get_unique_cards(final_cards))
         M.show_next_card_in_session()
       end)
       return

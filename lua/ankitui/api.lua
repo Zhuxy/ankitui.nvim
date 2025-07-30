@@ -49,7 +49,14 @@ function M.send_request(action, params, callback)
     end,
     on_exit = function(_, exit_code)
       if exit_code ~= 0 then
-        vim.notify("AnkiConnect request failed: " .. table.concat(stderr_chunks), vim.log.levels.ERROR)
+        if exit_code == 7 then
+          vim.notify(
+            "Failed to connect to Anki. Please ensure Anki is running and anki-connect is installed.",
+            vim.log.levels.ERROR
+          )
+        else
+          vim.notify("AnkiConnect request failed: " .. table.concat(stderr_chunks), vim.log.levels.ERROR)
+        end
         callback(nil)
         return
       end
