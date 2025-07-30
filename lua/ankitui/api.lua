@@ -79,4 +79,17 @@ function M.send_request(action, params, callback)
   })
 end
 
+function M.sync(callback)
+  M.send_request("sync", {}, function(result)
+    if result then
+      vim.notify("Anki sync completed successfully.", vim.log.levels.INFO)
+    else
+      vim.notify("Anki sync failed.", vim.log.levels.ERROR)
+    end
+    if callback then
+      callback(result ~= nil)
+    end
+  end)
+end
+
 return M

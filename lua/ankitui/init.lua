@@ -365,6 +365,43 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
 end
 
 
+function M.show_confirmation_dialog(prompt, callback)
+  local confirm_win
+
+  local function close_win()
+    if confirm_win and confirm_win.win and vim.api.nvim_win_is_valid(confirm_win.win) then
+      confirm_win:close()
+    end
+  end
+
+  confirm_win = Snacks.win({
+    text = { prompt, "", "(y)es / (n)o" },
+    border = "rounded",
+    width = 0.4,
+    height = 5,
+    relative = "editor",
+    row = 0.4,
+    col = 0.3,
+    focusable = true,
+    zindex = 102,
+    keys = {
+      ["y"] = function()
+        close_win()
+        callback(true)
+      end,
+      ["n"] = function()
+        close_win()
+        callback(false)
+      end,
+      ["<esc>"] = function()
+        close_win()
+        callback(false)
+      end,
+    },
+  })
+end
+
+
 function M.show_question_in_float_window(card_id, note_id, question_text, answer_text)
   if not Snacks then
     vim.notify("Error: snacks.nvim is not loaded.", vim.log.levels.ERROR)
@@ -426,19 +463,25 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
       ["3"] = function() handle_answer(3) end,
       ["4"] = function() handle_answer(4) end,
       ["<esc>"] = function()
-        local choice = vim.fn.confirm('Exit review session?', '&Yes\n&No', 2)
-        if choice == 1 then
-          win:close()
-          if hint_win then
-            hint_win:close()
+        M.show_confirmation_dialog("Exit review session?", function(confirmed)
+          if confirmed then
+            win:close()
+            if hint_win then
+              hint_win:close()
+            end
+            M.current_session = {
+              deck_name = nil,
+              deck_config = nil,
+              card_ids = {},
+            }
+            vim.notify("Review session ended.", vim.log.levels.INFO)
+            M.show_confirmation_dialog("Sync with Anki server?", function(sync_confirmed)
+              if sync_confirmed then
+                require("ankitui.api").sync()
+              end
+            end)
           end
-          M.current_session = {
-            deck_name = nil,
-            deck_config = nil,
-            card_ids = {},
-          }
-          vim.notify("Review session ended.", vim.log.levels.INFO)
-        end
+        end)
       end,
     }
   })
