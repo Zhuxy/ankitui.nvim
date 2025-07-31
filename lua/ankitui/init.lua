@@ -409,6 +409,56 @@ function M.show_confirmation_dialog(prompt, callback)
 end
 
 
+function M.show_session_cards()
+  if #M.current_session.card_ids == 0 then
+    vim.notify("No cards in the current session.", vim.log.levels.INFO)
+    return
+  end
+
+  api.send_request("cardsInfo", { cards = M.current_session.card_ids }, function(cards_info)
+    if not cards_info then
+      vim.notify("Failed to get session cards info.", vim.log.levels.ERROR)
+      return
+    end
+
+    local card_names = {}
+    for i, card_info in ipairs(cards_info) do
+      local question_parts = {}
+      for _, field_name in ipairs(M.current_session.deck_config.question_fields) do
+        table.insert(question_parts, card_info.fields[field_name].value)
+      end
+      local question_text = table.concat(question_parts, " ")
+      local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
+      cleaned_question = cleaned_question:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
+      table.insert(card_names, string.format("%d. %s", i, cleaned_question))
+    end
+
+    local session_win
+    session_win = Snacks.win({
+      text = card_names,
+      border = "rounded",
+      width = 0.8,
+      height = 0.8,
+      relative = "editor",
+      row = 0.1,
+      col = 0.1,
+      focusable = true,
+      zindex = 101,
+      wo = {
+        wrap = true,
+      },
+      keys = {
+        ["q"] = function()
+          session_win:close()
+        end,
+        ["<esc>"] = function()
+          session_win:close()
+        end,
+      },
+    })
+  end)
+end
+
 function M.show_question_in_float_window(card_id, note_id, question_text, answer_text)
   if not Snacks then
     vim.notify("Error: snacks.nvim is not loaded.", vim.log.levels.ERROR)
@@ -447,6 +497,9 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
       wrap = true,
     },
     keys = {
+      ["<leader>s"] = function()
+        M.show_session_cards()
+      end,
       ["e"] = function()
         if not card.showing_question then
           M.get_note_info(card.note_id, function(note_info)
