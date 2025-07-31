@@ -49,6 +49,53 @@ Install with your preferred plugin manager. For |lazy.nvim|:
 3. Usage                                                        *ankitui-usage*
 
 ------------------------------------------------------------------------------
+3.1. Configuration                                      *ankitui-configuration*
+
+You can customize the plugin's behavior by calling the `setup` function in your
+Neovim configuration. The following options are available:
+
+- `new_cards_per_session`: The number of new cards to fetch per session
+  (default: `5`).
+- `max_cards_per_session`: The maximum number of cards to review in a session
+  (default: `20`).
+- `log_to_file`: Whether to log AnkiConnect calls to a file (default: `false`).
+- `keymaps`: A table of keymappings for the review session. The defaults are:
+
+>lua
+keymaps = {
+  again = "1",
+  hard = "2",
+  good = "3",
+  easy = "4",
+  show_session_cards = "<leader>s",
+  toggle_qa = "<space>",
+}
+<end
+
+Example configuration with |lazy.nvim|:
+
+>lua
+{
+  'Zhuxy/ankitui.nvim',
+  dependencies = {
+    'nvim-telescope/telescope.nvim',
+    'folke/snacks.nvim',
+  },
+  config = function()
+    require('ankitui').setup({
+      keymaps = {
+        again = 'a',
+        hard = 's',
+        good = 'd',
+        easy = 'f',
+        show_session_cards = '<leader>l',
+      }
+    })
+  end
+}
+<end
+
+------------------------------------------------------------------------------
 3.1. Start Learning Session                             *ankitui-start-learning*
 
 To begin reviewing cards, execute the following Neovim command:
@@ -77,15 +124,15 @@ Your field selections will be automatically saved to
 ------------------------------------------------------------------------------
 3.3. Reviewing Cards                                    *ankitui-reviewing*
 
-During a review session:
+During a review session, a floating window will display the current card. Below the card, a hint bar shows the available keybindings:
 
-- To toggle between the question and answer view, press `<Space>`.
-- After revealing the answer, rate the card's ease of recall using the number
-  keys:
-    - `1`: Again (lowest ease)
-    - `2`: Hard
-    - `3`: Good
-    - `4`: Easy (highest ease)
+- To toggle between the question and answer view, press the key configured for `toggle_qa` (defaults to `<Space>`).
+- To view a list of all cards in the current session, press the key configured for `show_session_cards` (defaults to `<leader>s`).
+- After revealing the answer, rate the card's ease of recall using the configured keys:
+    - `again` (defaults to `1`): Lowest ease
+    - `hard` (defaults to `2`): Hard
+    - `good` (defaults to `3`): Good
+    - `easy` (defaults to `4`): Easy (highest ease)
 
 Upon rating, the card's status will be updated in Anki, and the next card in
 your session will be automatically displayed.

@@ -38,6 +38,49 @@ Install with your favorite plugin manager. For `lazy.nvim`:
 }
 ```
 
+## Configuration
+
+You can customize the plugin's behavior by calling the `setup` function. The following options are available:
+
+- `new_cards_per_session`: The number of new cards to fetch per session (default: `5`).
+- `max_cards_per_session`: The maximum number of cards to review in a session (default: `20`).
+- `log_to_file`: Whether to log AnkiConnect calls to a file (default: `false`).
+- `keymaps`: A table of keymappings for the review session. The defaults are:
+
+```lua
+keymaps = {
+  again = "1",
+  hard = "2",
+  good = "3",
+  easy = "4",
+  show_session_cards = "<leader>s",
+  toggle_qa = "<space>",
+}
+```
+
+Example configuration with `lazy.nvim`:
+
+```lua
+{
+  'Zhuxy/ankitui.nvim',
+  dependencies = {
+    'nvim-telescope/telescope.nvim',
+    'folke/snacks.nvim',
+  },
+  config = function()
+    require('ankitui').setup({
+      keymaps = {
+        again = 'a',
+        hard = 's',
+        good = 'd',
+        easy = 'f',
+        show_session_cards = '<leader>l',
+      }
+    })
+  end
+}
+```
+
 ## Usage
 
 ### Start a Learning Session

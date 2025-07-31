@@ -14,6 +14,14 @@ M.config = {
   new_cards_per_session = 5,
   max_cards_per_session = 20,
   log_to_file = false,
+  keymaps = {
+    again = "1",
+    hard = "2",
+    good = "3",
+    easy = "4",
+    show_session_cards = "<leader>s",
+    toggle_qa = "<space>",
+  },
 }
 
 function M.setup(user_config)
@@ -469,7 +477,15 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
   local win
   local hint_win
 
-  local hint_text = "1(again)  2(hard)  3(good)  4(easy)"
+  local hint_text = string.format(
+    "%s(again)  %s(hard)  %s(good)  %s(easy) | %s(toggle) | %s(list cards)",
+    M.config.keymaps.again,
+    M.config.keymaps.hard,
+    M.config.keymaps.good,
+    M.config.keymaps.easy,
+    M.config.keymaps.toggle_qa,
+    M.config.keymaps.show_session_cards
+  )
 
   local function handle_answer(ease)
     M.answer_cards({ { cardId = card.id, ease = ease } }, function(success)
@@ -479,6 +495,54 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
           hint_win:close()
         end
         M.show_next_card_in_session()
+      end
+    end)
+  end
+
+  local keys = {}
+  keys[M.config.keymaps.show_session_cards] = function()
+    M.show_session_cards()
+  end
+  keys["e"] = function()
+    if not card.showing_question then
+      M.get_note_info(card.note_id, function(note_info)
+        if note_info then
+          M.show_edit_window(note_info, M.current_session.deck_config.answer_fields[1], win.win)
+        end
+      end)
+    end
+  end
+  keys[M.config.keymaps.toggle_qa] = function()
+    if card.showing_question then
+      vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.answer))
+      card.showing_question = false
+    else
+      vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.question))
+      card.showing_question = true
+    end
+  end
+  keys[M.config.keymaps.again] = function() handle_answer(1) end
+  keys[M.config.keymaps.hard] = function() handle_answer(2) end
+  keys[M.config.keymaps.good] = function() handle_answer(3) end
+  keys[M.config.keymaps.easy] = function() handle_answer(4) end
+  keys["<esc>"] = function()
+    M.show_confirmation_dialog("Exit review session?", function(confirmed)
+      if confirmed then
+        win:close()
+        if hint_win then
+          hint_win:close()
+        end
+        M.current_session = {
+          deck_name = nil,
+          deck_config = nil,
+          card_ids = {},
+        }
+        vim.notify("Review session ended.", vim.log.levels.INFO)
+        M.show_confirmation_dialog("Sync with Anki server?", function(sync_confirmed)
+          if sync_confirmed then
+            require("ankitui.api").sync()
+          end
+        end)
       end
     end)
   end
@@ -496,54 +560,7 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
     wo = {
       wrap = true,
     },
-    keys = {
-      ["<leader>s"] = function()
-        M.show_session_cards()
-      end,
-      ["e"] = function()
-        if not card.showing_question then
-          M.get_note_info(card.note_id, function(note_info)
-            if note_info then
-              M.show_edit_window(note_info, M.current_session.deck_config.answer_fields[1], win.win)
-            end
-          end)
-        end
-      end,
-      ["<space>"] = function()
-        if card.showing_question then
-          vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.answer))
-          card.showing_question = false
-        else
-          vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.question))
-          card.showing_question = true
-        end
-      end,
-      ["1"] = function() handle_answer(1) end,
-      ["2"] = function() handle_answer(2) end,
-      ["3"] = function() handle_answer(3) end,
-      ["4"] = function() handle_answer(4) end,
-      ["<esc>"] = function()
-        M.show_confirmation_dialog("Exit review session?", function(confirmed)
-          if confirmed then
-            win:close()
-            if hint_win then
-              hint_win:close()
-            end
-            M.current_session = {
-              deck_name = nil,
-              deck_config = nil,
-              card_ids = {},
-            }
-            vim.notify("Review session ended.", vim.log.levels.INFO)
-            M.show_confirmation_dialog("Sync with Anki server?", function(sync_confirmed)
-              if sync_confirmed then
-                require("ankitui.api").sync()
-              end
-            end)
-          end
-        end)
-      end,
-    }
+    keys = keys,
   })
 
 
