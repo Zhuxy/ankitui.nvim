@@ -21,6 +21,7 @@ M.config = {
     easy = "4",
     show_session_cards = "<leader>s",
     toggle_qa = "<space>",
+    edit_card = "e",
   },
 }
 
@@ -352,12 +353,12 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
     if field_name == focused_field then
       focused_win = win
     end
-    vim.api.nvim_buf_set_keymap(buf, "n", "<leader>s", ":lua require('ankitui').save_and_close()<CR>", { noremap = true, silent = true })
+    vim.api.nvim_buf_set_keymap(buf, "n", "<leader>S", ":lua require('ankitui').save_and_close()<CR>", { noremap = true, silent = true })
     vim.api.nvim_buf_set_keymap(buf, "n", "q", ":lua require('ankitui').cancel_and_close()<CR>", { noremap = true, silent = true })
     current_row = current_row + win_heights[i] + field_padding
   end
 
-  local hint_text = "<leader>s (Save) | q (Quit without saving)"
+  local hint_text = "<leader>S (Save) | q (Quit without saving)"
   local hint_win = Snacks.win({
     text = hint_text,
     border = "rounded",
@@ -478,13 +479,14 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
   local hint_win
 
   local hint_text = string.format(
-    "%s(again)  %s(hard)  %s(good)  %s(easy) | %s(toggle) | %s(list cards)",
+    "%s(again)  %s(hard)  %s(good)  %s(easy) | %s(toggle) | %s(list cards) | %s(edit card)",
     M.config.keymaps.again,
     M.config.keymaps.hard,
     M.config.keymaps.good,
     M.config.keymaps.easy,
     M.config.keymaps.toggle_qa,
-    M.config.keymaps.show_session_cards
+    M.config.keymaps.show_session_cards,
+    M.config.keymaps.edit_card
   )
 
   local function handle_answer(ease)
@@ -503,14 +505,15 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
   keys[M.config.keymaps.show_session_cards] = function()
     M.show_session_cards()
   end
-  keys["e"] = function()
-    if not card.showing_question then
-      M.get_note_info(card.note_id, function(note_info)
-        if note_info then
-          M.show_edit_window(note_info, M.current_session.deck_config.answer_fields[1], win.win)
-        end
-      end)
-    end
+  keys[M.config.keymaps.edit_card] = function()
+    M.get_note_info(card.note_id, function(note_info)
+      if note_info then
+        local focused_field = card.showing_question
+            and M.current_session.deck_config.question_fields[1]
+            or M.current_session.deck_config.answer_fields[1]
+        M.show_edit_window(note_info, focused_field, win.win)
+      end
+    end)
   end
   keys[M.config.keymaps.toggle_qa] = function()
     if card.showing_question then
