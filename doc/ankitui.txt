@@ -126,7 +126,7 @@ Your field selections will be automatically saved to
 
 During a review session, a floating window will display the current card. Below the card, a hint bar shows the available keybindings:
 
-- To toggle between the question and answer view, press the key configured for `toggle_qa` (defaults to `<Space>`).
+- To toggle between the question and answer view, press the key configured for `flip_card` (defaults to `<Space>`).
 - To view a list of all cards in the current session, press the key configured for `show_session_cards` (defaults to `<leader>s`).
 - After revealing the answer, rate the card's ease of recall using the configured keys:
     - `again` (defaults to `1`): Lowest ease

@@ -12,6 +12,6 @@ vim.api.nvim_create_user_command(
 
 vim.api.nvim_create_user_command(
   "AnkiClearConfig",
-  function() require("ankitui.config").clear_config() end,
+  function() require("ankitui.config").clear_deck_config() end,
   { nargs = 0, desc = "Clear AnkiTUI configuration" }
 )

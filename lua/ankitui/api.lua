@@ -1,17 +1,30 @@
 local M = {}
 
+local anki_connect_url = "http://localhost:8765"
+local anki_connect_api_key = ""
+
+function M.setup(config)
+  anki_connect_url = config.anki_connect_url
+  anki_connect_api_key = config.anki_connect_api_key
+end
+
 function M.send_request(action, params, callback)
-  local anki_connect_url = "http://localhost:8765"
-  local request_body
+  local final_params = params
   if next(params) == nil then
-    request_body = string.format('{"action": "%s", "version": 6, "params": {}}', action)
-  else
-    request_body = vim.fn.json_encode({
-      action = action,
-      version = 6,
-      params = params,
-    })
+    final_params = vim.empty_dict()
   end
+
+  local request_data = {
+    action = action,
+    version = 6,
+    params = final_params,
+  }
+
+  if anki_connect_api_key and anki_connect_api_key ~= "" then
+    request_data.key = anki_connect_api_key
+  end
+
+  local request_body = vim.fn.json_encode(request_data)
 
   local command = {
     "curl",

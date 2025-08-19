@@ -4,7 +4,7 @@ local config_dir = vim.fn.stdpath("data") .. "/ankitui"
 vim.fn.mkdir(config_dir, "p")
 local config_path = config_dir .. "/deck_config.json"
 
-function M.load_config()
+function M.load_deck_config()
   local f = io.open(config_path, "r")
   if f then
     local content = f:read("*a")
@@ -17,7 +17,7 @@ function M.load_config()
   return {}
 end
 
-function M.save_config(config)
+function M.save_deck_config(config)
   local f = io.open(config_path, "w")
   if f then
     f:write(vim.fn.json_encode(config))
@@ -25,7 +25,7 @@ function M.save_config(config)
   end
 end
 
-function M.clear_config()
+function M.clear_deck_config()
   local f = io.open(config_path, "w")
   if f then
     f:write("{}") -- Write an empty JSON object to clear the config

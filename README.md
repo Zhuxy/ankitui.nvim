@@ -42,6 +42,8 @@ Install with your favorite plugin manager. For `lazy.nvim`:
 
 You can customize the plugin's behavior by calling the `setup` function. The following options are available:
 
+- `anki_connect_url`: The url of anki-connect (default: "http://localhost:8765").
+- `anki_connect_api_key`: The api key to access anki-connect url (default: none).
 - `new_cards_per_session`: The number of new cards to fetch per session (default: `5`).
 - `max_cards_per_session`: The maximum number of cards to review in a session (default: `20`).
 - `log_to_file`: Whether to log AnkiConnect calls to a file (default: `false`).
@@ -54,7 +56,7 @@ keymaps = {
   good = "3",
   easy = "4",
   show_session_cards = "<leader>s",
-  toggle_qa = "<space>",
+  flip_card = "<space>",
 }
 ```
 
@@ -119,8 +121,6 @@ After rating, the current card will be submitted to Anki, and the next card in y
 - **Initiate Edit**: While viewing the **answer** of a card, press `e` to open the edit interface.
 - **Edit Interface**: This will open multiple floating windows, one for each field of the note. The window corresponding to the answer field will be automatically focused.
 - **Save Changes**: In any edit window, press `<leader>s` to save all changes to Anki. The edit windows will close, and focus will return to the main review window.
-- **Quit Without Saving**: In any edit window, press `q` to close all edit windows without saving any changes. Focus will return to the main review window.
-
 
 
 ### Exiting a Session

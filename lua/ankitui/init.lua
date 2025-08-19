@@ -6,11 +6,12 @@ local Snacks = require("snacks")
 local config = require("ankitui.config")
 local api = require("ankitui.api")
 
-math.randomseed(os.time())
-
 local M = {}
 
+---@class Config
 M.config = {
+  anki_connect_url = "http://localhost:8765",
+  anki_connect_api_key = "",
   new_cards_per_session = 5,
   max_cards_per_session = 20,
   log_to_file = false,
@@ -20,13 +21,14 @@ M.config = {
     good = "3",
     easy = "4",
     show_session_cards = "<leader>s",
-    toggle_qa = "<space>",
+    flip_card = "<space>",
     edit_card = "e",
   },
 }
 
 function M.setup(user_config)
   M.config = vim.tbl_deep_extend("force", M.config, user_config or {})
+  api.setup(M.config)
 end
 
 -- Session state
@@ -484,7 +486,7 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
     M.config.keymaps.hard,
     M.config.keymaps.good,
     M.config.keymaps.easy,
-    M.config.keymaps.toggle_qa,
+    M.config.keymaps.flip_card,
     M.config.keymaps.show_session_cards,
     M.config.keymaps.edit_card
   )
@@ -515,7 +517,7 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
       end
     end)
   end
-  keys[M.config.keymaps.toggle_qa] = function()
+  keys[M.config.keymaps.flip_card] = function()
     if card.showing_question then
       vim.api.nvim_buf_set_lines(win.buf, 0, -1, false, M.split_into_lines(card.answer))
       card.showing_question = false
@@ -655,13 +657,13 @@ function M.start_learning_flow()
           actions.close(prompt_bufnr)
           local selection = action_state.get_selected_entry()
           local selected_deck = selection.value
-          local all_configs = config.load_config()
+          local all_configs = config.load_deck_config()
           local deck_config = all_configs[selected_deck]
           if not deck_config then
             M.configure_deck(selected_deck, function(new_deck_config)
               if new_deck_config then
                 all_configs[selected_deck] = new_deck_config
-                config.save_config(all_configs)
+                config.save_deck_config(all_configs)
                 M.start_review_session(selected_deck, new_deck_config)
               end
             end)
