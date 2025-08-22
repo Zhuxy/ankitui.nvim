@@ -3,7 +3,6 @@ local finders = require("telescope.finders")
 local actions = require("telescope.actions")
 local action_state = require("telescope.actions.state")
 local Snacks = require("snacks")
-local config = require("ankitui.config")
 local api = require("ankitui.api")
 
 local M = {}
@@ -34,7 +33,6 @@ end
 -- Session state
 M.current_session = {
   deck_name = nil,
-  deck_config = nil,
   card_ids = {},
 }
 
@@ -105,29 +103,7 @@ function M.get_deck_names(callback)
   api.send_request("deckNames", {}, callback)
 end
 
-function M.get_field_names(deck_name, callback)
-  api.send_request("findNotes", { query = "deck:\"" .. deck_name .. "\"" }, function(notes)
-    if not notes or #notes == 0 then
-      callback(nil)
-      return
-    end
 
-    local note_id = notes[1]
-    api.send_request("notesInfo", { notes = { note_id } }, function(note_info_result)
-      if not note_info_result or #note_info_result == 0 then
-        callback(nil)
-        return
-      end
-
-      local note_info = note_info_result[1]
-      local field_names = {}
-      for k, _ in pairs(note_info.fields) do
-        table.insert(field_names, k)
-      end
-      callback(field_names)
-    end)
-  end)
-end
 
 function M.answer_cards(answers, callback)
   api.send_request("answerCards", { answers = answers }, function(result)
@@ -149,16 +125,12 @@ function M.show_next_card_in_session()
     end
 
     local card_info = card_info_result[1]
-    local question_parts = {}
-    for _, field_name in ipairs(M.current_session.deck_config.question_fields) do
-      table.insert(question_parts, card_info.fields[field_name].value)
-    end
-    local question_text = table.concat(question_parts, "\n\n")
-    local answer_parts = {}
-    for _, field_name in ipairs(M.current_session.deck_config.answer_fields) do
-      table.insert(answer_parts, card_info.fields[field_name].value)
-    end
-    local answer_text = table.concat(answer_parts, "\n\n")
+
+    local html = require("ankitui.html")
+    local question_parts = html.render(card_info.question)
+    local question_text = table.concat(question_parts, "\n")
+    local answer_parts = html.render(card_info.answer)
+    local answer_text = table.concat(answer_parts, "\n")
     local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
     local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(answer_text)))
     M.show_question_in_float_window(card_id, card_info.note, cleaned_question, cleaned_answer)
@@ -177,7 +149,7 @@ local function get_unique_cards(cards)
   return unique_cards
 end
 
-function M.start_review_session(deck_name, deck_config)
+function M.start_review_session(deck_name)
   local all_card_ids = {}
 
   local function fetch_cards(query, callback)
@@ -226,7 +198,6 @@ function M.start_review_session(deck_name, deck_config)
         end
 
         M.current_session.deck_name = deck_name
-        M.current_session.deck_config = deck_config
         M.current_session.card_ids = shuffle_table(get_unique_cards(final_cards))
         M.show_next_card_in_session()
       end)
@@ -282,7 +253,7 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
 
   local win_heights = {}
   local total_height = 0
-  local min_field_height = 5 -- Minimum lines for each field
+  local min_field_height = 3 -- Minimum lines for each field
   local field_padding = 2 -- Lines between fields
 
   for _, field_name in ipairs(field_keys) do
@@ -434,11 +405,7 @@ function M.show_session_cards()
 
     local card_names = {}
     for i, card_info in ipairs(cards_info) do
-      local question_parts = {}
-      for _, field_name in ipairs(M.current_session.deck_config.question_fields) do
-        table.insert(question_parts, card_info.fields[field_name].value)
-      end
-      local question_text = table.concat(question_parts, " ")
+      local question_text = card_info.question
       local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
       cleaned_question = cleaned_question:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
       table.insert(card_names, string.format("%d. %s", i, cleaned_question))
@@ -510,10 +477,7 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
   keys[M.config.keymaps.edit_card] = function()
     M.get_note_info(card.note_id, function(note_info)
       if note_info then
-        local focused_field = card.showing_question
-            and M.current_session.deck_config.question_fields[1]
-            or M.current_session.deck_config.answer_fields[1]
-        M.show_edit_window(note_info, focused_field, win.win)
+        M.show_edit_window(note_info, nil, win.win)
       end
     end)
   end
@@ -539,7 +503,6 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
         end
         M.current_session = {
           deck_name = nil,
-          deck_config = nil,
           card_ids = {},
         }
         vim.notify("Review session ended.", vim.log.levels.INFO)
@@ -556,9 +519,9 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
     text = M.split_into_lines(question_text),
     border = "rounded",
     width = 0.8,
-    height = 0.4,
+    height = 0.7,
     relative = "editor",
-    row = 0.3,
+    row = 0.15,
     col = 0.1,
     focusable = true,
     zindex = 100,
@@ -575,72 +538,14 @@ function M.show_question_in_float_window(card_id, note_id, question_text, answer
     width = 0.8,
     height = 3,
     relative = "editor",
-    row = 0.7,
+    row = 0.85,
     col = 0.1,
     focusable = false,
     zindex = 100,
   })
 end
 
-function M.configure_deck(deck_name, callback)
-  M.get_field_names(deck_name, function(field_names)
-    if not field_names or #field_names == 0 then
-      vim.notify("Could not get field names for deck: " .. deck_name, vim.log.levels.ERROR)
-      callback(nil)
-      return
-    end
-    pickers.new({
-      prompt_title = "Select Question Fields for " .. deck_name .. " (use <Tab> to select multiple)",
-      finder = finders.new_table({ results = field_names, entry_maker = function(entry) return { value = entry, display = entry, ordinal = entry } end }),
-      sorter = require("telescope.sorters").get_generic_fuzzy_sorter(),
-      attach_mappings = function(prompt_bufnr, map)
-        map("i", "<Tab>", actions.toggle_selection + actions.move_selection_next)
-        map("n", "<Tab>", actions.toggle_selection + actions.move_selection_next)
-        actions.select_default:replace(function()
-          local picker = action_state.get_current_picker(prompt_bufnr)
-          local selections = picker:get_multi_selection()
-          actions.close(prompt_bufnr)
-          if #selections == 0 then
-            vim.notify("No fields selected for question.", vim.log.levels.WARN)
-            callback(nil)
-            return
-          end
-          local question_fields = {}
-          for _, selection in ipairs(selections) do
-            table.insert(question_fields, selection.value)
-          end
 
-          pickers.new({
-            prompt_title = "Select Answer Fields for " .. deck_name .. " (use <Tab> to select multiple)",
-            finder = finders.new_table({ results = field_names, entry_maker = function(entry) return { value = entry, display = entry, ordinal = entry } end }),
-            sorter = require("telescope.sorters").get_generic_fuzzy_sorter(),
-            attach_mappings = function(prompt_bufnr2, map2)
-              map2("i", "<Tab>", actions.toggle_selection + actions.move_selection_next)
-              map2("n", "<Tab>", actions.toggle_selection + actions.move_selection_next)
-              actions.select_default:replace(function()
-                local picker2 = action_state.get_current_picker(prompt_bufnr2)
-                local selections2 = picker2:get_multi_selection()
-                actions.close(prompt_bufnr2)
-                if #selections2 == 0 then
-                  vim.notify("No fields selected for answer.", vim.log.levels.WARN)
-                  callback(nil)
-                  return
-                end
-                local answer_fields = {}
-                for _, selection in ipairs(selections2) do
-                  table.insert(answer_fields, selection.value)
-                end
-                callback({ question_fields = question_fields, answer_fields = answer_fields })
-              end)
-              return true
-            end,
-          }):find()
-        end)
-        return true
-      end,
-    }):find()
-  end)
-end
 
 function M.start_learning_flow()
   M.get_deck_names(function(decks)
@@ -657,19 +562,7 @@ function M.start_learning_flow()
           actions.close(prompt_bufnr)
           local selection = action_state.get_selected_entry()
           local selected_deck = selection.value
-          local all_configs = config.load_deck_config()
-          local deck_config = all_configs[selected_deck]
-          if not deck_config then
-            M.configure_deck(selected_deck, function(new_deck_config)
-              if new_deck_config then
-                all_configs[selected_deck] = new_deck_config
-                config.save_deck_config(all_configs)
-                M.start_review_session(selected_deck, new_deck_config)
-              end
-            end)
-          else
-            M.start_review_session(selected_deck, deck_config)
-          end
+          M.start_review_session(selected_deck)
         end)
         return true
       end,
