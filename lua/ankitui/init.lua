@@ -4,6 +4,7 @@ local actions = require("telescope.actions")
 local action_state = require("telescope.actions.state")
 local Snacks = require("snacks")
 local api = require("ankitui.api")
+local html = require("ankitui.html")
 
 local M = {}
 
@@ -61,33 +62,32 @@ function M.log_anki_connect_call(type, details)
   vim.fn.writefile({ log_entry }, LOG_FILE, "a")
 end
 
--- Helper function to strip HTML tags
-function M.strip_html_tags(text)
-  text = text:gsub("<br%s*/>", "\n")
-  text = text:gsub("<br>", "\n")
-  text = text:gsub("<div>", "\n")
-  text = text:gsub("</div>", "")
-  text = text:gsub("<[^>]+>", "")
-  return text
-end
-
 -- Helper function to decode HTML entities
-function M.decode_html_entities(text)
-  text = text:gsub("&nbsp;", " ")
-  text = text:gsub("&lt;", "<")
-  text = text:gsub("&gt;", ">")
-  text = text:gsub("&amp;", "&")
-  text = text:gsub("&quot;", "\"")
-  text = text:gsub("&#39;", "'")
-  return text
+function M.decode_html_entities(lines)
+  for i, line in ipairs(lines) do
+    local text = line
+    text = text:gsub("&nbsp;", " ")
+    text = text:gsub("&lt;", "<")
+    text = text:gsub("&gt;", ">")
+    text = text:gsub("&amp;", "&")
+    text = text:gsub("&quot;", "\"")
+    text = text:gsub("&#39;", "'")
+    lines[i] = text
+  end
+  return lines
 end
 
 -- Helper function to decode Unicode escape sequences
-function M.decode_unicode_escapes(text)
-  return text:gsub("\\u(%x%x%x%x)", function(hex)
-    return vim.fn.nr2char(tonumber(hex, 16))
+function M.decode_unicode_escapes(lines)
+  for i, line in ipairs(lines) do
+    local text = line
+    text = text:gsub("\\u(%x%x%x%x)", function(hex)
+      return vim.fn.nr2char(tonumber(hex, 16))
 
-  end)
+    end)
+    lines[i] = text
+  end
+  return lines
 end
 
 -- Helper function to split string into lines
@@ -126,14 +126,11 @@ function M.show_next_card_in_session()
 
     local card_info = card_info_result[1]
 
-    local html = require("ankitui.html")
     local question_parts = html.render(card_info.question)
-    local question_text = table.concat(question_parts, "\n")
     local answer_parts = html.render(card_info.answer)
-    local answer_text = table.concat(answer_parts, "\n")
-    local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
-    local cleaned_answer = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(answer_text)))
-    M.show_question_in_float_window(card_id, card_info.note, cleaned_question, cleaned_answer)
+    local question_text = table.concat(M.decode_unicode_escapes(M.decode_html_entities(question_parts)), "\n")
+    local answer_text = table.concat(M.decode_unicode_escapes(M.decode_html_entities(answer_parts)), "\n")
+    M.show_question_in_float_window(card_id, card_info.note, question_text, answer_text)
   end)
 end
 
@@ -405,10 +402,18 @@ function M.show_session_cards()
 
     local card_names = {}
     for i, card_info in ipairs(cards_info) do
-      local question_text = card_info.question
-      local cleaned_question = M.decode_unicode_escapes(M.strip_html_tags(M.decode_html_entities(question_text)))
-      cleaned_question = cleaned_question:gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
-      table.insert(card_names, string.format("%d. %s", i, cleaned_question))
+      local question_parts = html.render(card_info.question)
+      local question_text = M.decode_unicode_escapes(M.decode_html_entities(question_parts))
+      local function strip_question_text(lines)
+        local text = table.concat(lines, " ")
+        text = text:gsub("%[Image%]", "")
+        if #text > 100 then
+          text = text:sub(1, 97) .. "..."
+        end
+        return text
+      end
+      local stripped_question_text = strip_question_text(question_text)
+      table.insert(card_names, string.format("%d. %s", i, stripped_question_text))
     end
 
     local session_win

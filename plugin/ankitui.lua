@@ -1,9 +1,5 @@
 local ankitui = require("ankitui")
 
-function ankitui.setup(config)
-  ankitui.config = vim.tbl_deep_extend("force", ankitui.config, config or {})
-end
-
 vim.api.nvim_create_user_command(
   "AnkiStartLearning",
   function() ankitui.start_learning_flow() end,
