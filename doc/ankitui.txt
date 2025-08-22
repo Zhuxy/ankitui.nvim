@@ -9,10 +9,9 @@ CONTENTS                                                *ankitui-contents*
   2. Installation.......................|ankitui-installation|
   3. Usage..............................|ankitui-usage|
      3.1. Start Learning Session........|ankitui-start-learning|
-     3.2. Configuring Deck Fields.......|ankitui-configure-fields|
-     3.3. Reviewing Cards...............|ankitui-reviewing|
+     3.2. Reviewing Cards...............|ankitui-reviewing|
+     3.3. Editing Cards.................|ankitui-editing|
      3.4. Exiting a Session.............|ankitui-exit-session|
-     3.5. Clearing Configuration........|ankitui-clear-config|
   4. Commands...........................|ankitui-commands|
   5. Troubleshooting....................|ankitui-troubleshooting|
 
@@ -68,7 +67,8 @@ keymaps = {
   good = "3",
   easy = "4",
   show_session_cards = "<leader>s",
-  toggle_qa = "<space>",
+  flip_card = "<space>",
+  edit_card = "e",
 }
 <end
 
@@ -96,30 +96,14 @@ Example configuration with |lazy.nvim|:
 <end
 
 ------------------------------------------------------------------------------
-3.1. Start Learning Session                             *ankitui-start-learning*
+3.2. Start Learning Session                             *ankitui-start-learning*
 
 To begin reviewing cards, execute the following Neovim command:
 
 :AnkiStartLearning
 
 This command will open a |telescope.nvim| picker, prompting you to select an
-Anki deck. If it's the first time you are reviewing cards from the chosen deck,
-you will be guided through a configuration process to define which fields
-constitute the "question" and "answer" parts of your cards.
-
-------------------------------------------------------------------------------
-3.2. Configuring Deck Fields                            *ankitui-configure-fields*
-
-When prompted to select fields for a new deck:
-
-- Use the `<Tab>` key to select multiple fields. The order in which you select
-  the fields determines their display order in the question or answer.
-- Press `<CR>` (Enter) to confirm your selection for the question fields.
-- You will then be prompted to select fields for the answer. Again, use `<Tab>`
-  for multiple selections and `<CR>` to confirm.
-
-Your field selections will be automatically saved to
-`stdpath('data')/ankitui/deck_config.json` for future sessions with that deck.
+Anki deck.
 
 ------------------------------------------------------------------------------
 3.3. Reviewing Cards                                    *ankitui-reviewing*
@@ -138,22 +122,19 @@ Upon rating, the card's status will be updated in Anki, and the next card in
 your session will be automatically displayed.
 
 ------------------------------------------------------------------------------
-3.4. Exiting a Session                                  *ankitui-exit-session*
+3.4. Editing Cards                                      *ankitui-editing*
+
+- To initiate the edit interface, press the key configured for `edit_card` (defaults to `e`) while viewing a card.
+- This will open multiple floating windows, one for each field of the note.
+- To save all changes to Anki, press `<leader>s` in any edit window. The edit windows will close, and focus will return to the main review window.
+- To cancel all changes, press `q` to cancel changes. The edit windows will close, and focus will return to the main review window.
+
+------------------------------------------------------------------------------
+3.5. Exiting a Session                                  *ankitui-exit-session*
 
 To terminate an active review session at any time, press `<ESC>`. A confirmation
 prompt will appear. Confirming will close the current card window and end the
 session.
-
-------------------------------------------------------------------------------
-3.5. Clearing Configuration                             *ankitui-clear-config*
-
-If you need to reset all previously saved deck configurations (e.g., due to
-changes in your Anki note types or a desire to reconfigure a deck from scratch),
-execute the following command:
-
-:AnkiClearConfig
-
-This will clear the `deck_config.json` file.
 
 ==============================================================================
 4. Commands                                                     *ankitui-commands*
@@ -162,9 +143,6 @@ These are the user commands provided by ankitui.nvim:
 
 :AnkiStartLearning
 	Starts a new Anki learning session. Opens a Telescope picker to select a deck.
-
-:AnkiClearConfig
-	Clears all saved deck configurations, allowing for fresh setup.
 
 ==============================================================================
 5. Troubleshooting                                      *ankitui-troubleshooting*
@@ -178,7 +156,7 @@ These are the user commands provided by ankitui.nvim:
   are indeed new cards available in the selected deck within Anki. The plugin
   uses the standard `is:new` query to find cards.
 
-- *Floating window display problems*: Ensure that |rcarriga/nvim-snacks|
+- *Floating window display problems*: Ensure that `folke/snacks.nvim`
   is properly installed and its dependencies are satisfied. Refer to its
   documentation for further troubleshooting.
 
