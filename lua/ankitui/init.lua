@@ -241,13 +241,18 @@ function M.set_cancel_and_close(fn)
   M.cancel_and_close = fn
 end
 
+local APPLY_KEY = "<leader>S"
+local CANCEL_KEY = "q"
+
 function M.build_footer_hint(is_dirty, is_scroll_locked)
   local status = is_dirty and " • Unsaved" or ""
   local lock_state = is_scroll_locked and "on" or "off"
   return string.format(
-    "%s(again) %s(hard)  Apply ↵  Cancel Esc  L Lock:%s%s",
+    "%s(again) %s(hard)  %s (Apply)  %s (Cancel)  L Lock:%s%s",
     M.config.keymaps.again,
     M.config.keymaps.hard,
+    APPLY_KEY,
+    CANCEL_KEY,
     lock_state,
     status
   )
@@ -308,7 +313,7 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
           M.restore_review_window(original_win_id, { refresh = true })
         end, 300)
       else
-        panel:set_footer({ "Save failed – press r to retry or c to cancel" })
+        panel:set_footer({ "Save failed – press " .. APPLY_KEY .. " to retry or " .. CANCEL_KEY .. " to cancel" })
       end
     end)
   end
@@ -410,18 +415,14 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
     refresh_footer()
   end, { buffer = panel.answer, nowait = true })
 
-  vim.keymap.set("n", "<leader>S", apply_changes, { buffer = panel.question })
-  vim.keymap.set("n", "<leader>S", apply_changes, { buffer = panel.answer })
-  vim.keymap.set("n", "q", cancel_changes, { buffer = panel.question })
-  vim.keymap.set("n", "q", cancel_changes, { buffer = panel.answer })
+  vim.keymap.set("n", APPLY_KEY, apply_changes, { buffer = panel.question })
+  vim.keymap.set("n", APPLY_KEY, apply_changes, { buffer = panel.answer })
+  vim.keymap.set("n", CANCEL_KEY, cancel_changes, { buffer = panel.question })
+  vim.keymap.set("n", CANCEL_KEY, cancel_changes, { buffer = panel.answer })
   vim.keymap.set("n", "<Esc>", cancel_changes, { buffer = panel.question })
   vim.keymap.set("n", "<Esc>", cancel_changes, { buffer = panel.answer })
   vim.keymap.set("i", "<Esc>", cancel_changes, { buffer = panel.question })
   vim.keymap.set("i", "<Esc>", cancel_changes, { buffer = panel.answer })
-  vim.keymap.set("n", "r", apply_changes, { buffer = panel.question })
-  vim.keymap.set("n", "r", apply_changes, { buffer = panel.answer })
-  vim.keymap.set("n", "c", cancel_changes, { buffer = panel.question })
-  vim.keymap.set("n", "c", cancel_changes, { buffer = panel.answer })
 
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
     buffer = panel.question,
