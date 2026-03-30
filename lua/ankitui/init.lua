@@ -337,18 +337,27 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
     callback = sync_answer_to_question,
   })
 
+  local function toggle_focus()
+    local current_win = vim.api.nvim_get_current_win()
+    if current_win == panel.question_win then
+      focus_answer_window()
+    else
+      focus_question_window()
+    end
+  end
+
   vim.keymap.set("n", "<Tab>", function()
-    focus_answer_window()
+    toggle_focus()
   end, { buffer = panel.question, nowait = true })
+  vim.keymap.set("n", "<Tab>", function()
+    toggle_focus()
+  end, { buffer = panel.answer, nowait = true })
   vim.keymap.set("i", "<Tab>", function()
-    focus_answer_window()
+    toggle_focus()
     return ""
   end, { buffer = panel.question, nowait = true, expr = true })
-  vim.keymap.set("n", "<S-Tab>", function()
-    focus_question_window()
-  end, { buffer = panel.answer, nowait = true })
-  vim.keymap.set("i", "<S-Tab>", function()
-    focus_question_window()
+  vim.keymap.set("i", "<Tab>", function()
+    toggle_focus()
     return ""
   end, { buffer = panel.answer, nowait = true, expr = true })
 
