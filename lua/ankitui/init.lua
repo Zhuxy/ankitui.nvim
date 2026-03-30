@@ -311,6 +311,23 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
     vim.api.nvim_win_set_cursor(panel.question_win, { target, 0 })
   end
 
+  local function focus_window(win)
+    local mode = vim.api.nvim_get_mode().mode
+    local was_insert = mode:sub(1, 1) == "i"
+    vim.api.nvim_set_current_win(win)
+    if was_insert then
+      vim.cmd("startinsert!")
+    end
+  end
+
+  local function focus_question_window()
+    focus_window(panel.question_win)
+  end
+
+  local function focus_answer_window()
+    focus_window(panel.answer_win)
+  end
+
   vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
     buffer = panel.question,
     callback = sync_question_to_answer,
@@ -321,11 +338,19 @@ function M.show_edit_window(note_info, focused_field, original_win_id)
   })
 
   vim.keymap.set("n", "<Tab>", function()
-    vim.api.nvim_set_current_win(panel.answer_win)
+    focus_answer_window()
   end, { buffer = panel.question, nowait = true })
+  vim.keymap.set("i", "<Tab>", function()
+    focus_answer_window()
+    return ""
+  end, { buffer = panel.question, nowait = true, expr = true })
   vim.keymap.set("n", "<S-Tab>", function()
-    vim.api.nvim_set_current_win(panel.question_win)
+    focus_question_window()
   end, { buffer = panel.answer, nowait = true })
+  vim.keymap.set("i", "<S-Tab>", function()
+    focus_question_window()
+    return ""
+  end, { buffer = panel.answer, nowait = true, expr = true })
 
   vim.keymap.set("n", "L", function()
     panel.scroll_lock = not panel.scroll_lock
