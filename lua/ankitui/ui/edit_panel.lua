@@ -1,6 +1,12 @@
 local Snacks = require("snacks")
 local M = {}
 
+local function safe_close(target)
+  if target and target.close then
+    pcall(target.close, target)
+  end
+end
+
 ---@param opts {question:{title:string,lines:string[]}, answer:{title:string,lines:string[]}, width:number, height:number, inner_width:number, pane_height:number, footer:{lines:string[], keys:table}}
 function M.create(opts)
   opts = opts or {}
@@ -83,12 +89,8 @@ function M.create(opts)
     if self.answer_win and vim.api.nvim_win_is_valid(self.answer_win) then
       vim.api.nvim_win_close(self.answer_win, true)
     end
-    if wrapper and wrapper.close then
-      wrapper:close()
-    else
-      Snacks.safe_close(wrapper)
-    end
-    Snacks.safe_close(self.footer)
+    safe_close(wrapper)
+    safe_close(self.footer)
     if vim.api.nvim_buf_is_valid(self.question) then
       vim.api.nvim_buf_delete(self.question, { force = true })
     end
