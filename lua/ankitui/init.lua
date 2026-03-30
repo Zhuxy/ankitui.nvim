@@ -3,6 +3,7 @@ local finders = require("telescope.finders")
 local actions = require("telescope.actions")
 local action_state = require("telescope.actions.state")
 local Snacks = require("snacks")
+local EditPanel = require("ankitui.ui.edit_panel")
 local api = require("ankitui.api")
 local html = require("ankitui.html")
 
@@ -240,110 +241,110 @@ function M.set_cancel_and_close(fn)
 end
 
 function M.show_edit_window(note_info, focused_field, original_win_id)
-  local bufs = {}
-  local wins = {}
-  local field_keys = {}
-  for k, _ in pairs(note_info.fields) do
-    table.insert(field_keys, k)
-  end
-  table.sort(field_keys)
-
-  local win_heights = {}
-  local total_height = 0
-  local min_field_height = 3 -- Minimum lines for each field
-  local field_padding = 2 -- Lines between fields
-
-  for _, field_name in ipairs(field_keys) do
-    local content_lines = #M.split_into_lines(note_info.fields[field_name].value)
-    local height = math.max(min_field_height, content_lines + 4) -- +4 for padding/border
-    table.insert(win_heights, height)
-    total_height = total_height + height + field_padding
+  local function build_footer_hint(is_scroll_locked)
+    local lock_state = is_scroll_locked and "on" or "off"
+    return string.format("<leader>S (Save) | q (Quit without saving) | [L] Scroll lock: %s", lock_state)
   end
 
-  -- Adjust total height to fit within 80% of screen height
-  local max_total_height = math.floor(vim.o.lines * 0.8)
-  if total_height > max_total_height then
-    local scale_factor = max_total_height / total_height
-    total_height = 0
-    for i, height in ipairs(win_heights) do
-      win_heights[i] = math.max(min_field_height, math.floor(height * scale_factor))
-      total_height = total_height + win_heights[i] + field_padding
-    end
-  end
+  local panel = EditPanel.create({
+    question = { title = "Question", lines = M.split_into_lines(note_info.fields.Front.value or "") },
+    answer = { title = "Answer", lines = M.split_into_lines(note_info.fields.Back.value or "") },
+    width = math.floor(vim.o.columns * 0.8),
+    height = math.floor(vim.o.lines * 0.75),
+    inner_width = math.floor(vim.o.columns * 0.76),
+    pane_height = math.floor(vim.o.lines * 0.28),
+    footer = { lines = { build_footer_hint(false) } },
+  })
 
-  local current_row = math.floor(vim.o.lines * 0.1)
-  local focused_win = nil
+  panel.get_values = function()
+    local question_lines = vim.api.nvim_buf_get_lines(panel.question, 0, -1, false)
+    local answer_lines = vim.api.nvim_buf_get_lines(panel.answer, 0, -1, false)
+    return {
+      Front = { value = table.concat(question_lines, "\n") },
+      Back = { value = table.concat(answer_lines, "\n") },
+    }
+  end
 
   local function save_and_close()
+    local values = panel.get_values()
     local new_fields = {}
-    for i, field_name in ipairs(field_keys) do
-      local lines = vim.api.nvim_buf_get_lines(bufs[i], 0, -1, false)
-      new_fields[field_name] = table.concat(lines, "\n")
+    for field_name, field_info in pairs(values) do
+      new_fields[field_name] = field_info.value
     end
 
     M.update_note_fields(note_info.noteId, new_fields, function(success)
       if success then
-        for _, win_id in ipairs(wins) do
-          vim.api.nvim_win_close(win_id, true)
-        end
-        for _, buf in ipairs(bufs) do
-          vim.api.nvim_buf_delete(buf, { force = true })
-        end
+        panel:close()
         vim.api.nvim_set_current_win(original_win_id)
       end
     end)
   end
 
   local function cancel_and_close()
-    for _, win_id in ipairs(wins) do
-      vim.api.nvim_win_close(win_id, true)
-    end
-    for _, buf in ipairs(bufs) do
-      vim.api.nvim_buf_delete(buf, { force = true })
-    end
+    panel:close()
     vim.api.nvim_set_current_win(original_win_id)
   end
 
-  for i, field_name in ipairs(field_keys) do
-    local buf = vim.api.nvim_create_buf(true, false)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, M.split_into_lines(note_info.fields[field_name].value))
-    table.insert(bufs, buf)
+  panel.scroll_lock = false
 
-    local win = vim.api.nvim_open_win(buf, true, {
-      relative = "editor",
-      width = math.floor(vim.o.columns * 0.8),
-      height = win_heights[i],
-      row = current_row,
-      col = math.floor(vim.o.columns * 0.1),
-      border = "rounded",
-      title = field_name,
-      zindex = 101,
-    })
-    table.insert(wins, win)
-    if field_name == focused_field then
-      focused_win = win
-    end
-    vim.api.nvim_buf_set_keymap(buf, "n", "<leader>S", ":lua require('ankitui').save_and_close()<CR>", { noremap = true, silent = true })
-    vim.api.nvim_buf_set_keymap(buf, "n", "q", ":lua require('ankitui').cancel_and_close()<CR>", { noremap = true, silent = true })
-    current_row = current_row + win_heights[i] + field_padding
+  local function update_footer_hint()
+    panel:set_footer({ build_footer_hint(panel.scroll_lock) })
   end
 
-  local hint_text = "<leader>S (Save) | q (Quit without saving)"
-  local hint_win = Snacks.win({
-    text = hint_text,
-    border = "rounded",
-    width = math.floor(vim.o.columns * 0.8),
-    height = 3,
-    relative = "editor",
-    row = current_row + 1,
-    col = math.floor(vim.o.columns * 0.1),
-    focusable = false,
-    zindex = 101,
-  })
-  table.insert(wins, hint_win.win)
+  local function sync_question_to_answer()
+    if not panel.scroll_lock then
+      return
+    end
+    local pos = vim.api.nvim_win_get_cursor(panel.question_win)[1]
+    local ratio = pos / math.max(1, vim.api.nvim_buf_line_count(panel.question))
+    local target = math.max(1, math.floor(ratio * vim.api.nvim_buf_line_count(panel.answer)))
+    vim.api.nvim_win_set_cursor(panel.answer_win, { target, 0 })
+  end
 
-  if focused_win then
-    vim.api.nvim_set_current_win(focused_win)
+  local function sync_answer_to_question()
+    if not panel.scroll_lock then
+      return
+    end
+    local pos = vim.api.nvim_win_get_cursor(panel.answer_win)[1]
+    local ratio = pos / math.max(1, vim.api.nvim_buf_line_count(panel.answer))
+    local target = math.max(1, math.floor(ratio * vim.api.nvim_buf_line_count(panel.question)))
+    vim.api.nvim_win_set_cursor(panel.question_win, { target, 0 })
+  end
+
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+    buffer = panel.question,
+    callback = sync_question_to_answer,
+  })
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+    buffer = panel.answer,
+    callback = sync_answer_to_question,
+  })
+
+  vim.keymap.set("n", "<Tab>", function()
+    vim.api.nvim_set_current_win(panel.answer_win)
+  end, { buffer = panel.question, nowait = true })
+  vim.keymap.set("n", "<S-Tab>", function()
+    vim.api.nvim_set_current_win(panel.question_win)
+  end, { buffer = panel.answer, nowait = true })
+
+  vim.keymap.set("n", "L", function()
+    panel.scroll_lock = not panel.scroll_lock
+    update_footer_hint()
+  end, { buffer = panel.question, nowait = true })
+  vim.keymap.set("n", "L", function()
+    panel.scroll_lock = not panel.scroll_lock
+    update_footer_hint()
+  end, { buffer = panel.answer, nowait = true })
+
+  vim.keymap.set("n", "<leader>S", save_and_close, { buffer = panel.question })
+  vim.keymap.set("n", "<leader>S", save_and_close, { buffer = panel.answer })
+  vim.keymap.set("n", "q", cancel_and_close, { buffer = panel.question })
+  vim.keymap.set("n", "q", cancel_and_close, { buffer = panel.answer })
+
+  if focused_field == "Back" then
+    vim.api.nvim_set_current_win(panel.answer_win)
+  else
+    vim.api.nvim_set_current_win(panel.question_win)
   end
 
   M.set_save_and_close(save_and_close)
