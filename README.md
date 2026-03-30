@@ -108,10 +108,11 @@ After rating, the current card will be submitted to Anki, and the next card in y
 
 ### Editing Cards
 
-- **Initiate Edit**: While viewing a card, press `e` to open the edit interface.
-- **Edit Interface**: This will open multiple floating windows, one for each field of the note.
-- **Save Changes**: In any edit window, press `<leader>s` to save all changes to Anki. The edit windows will close, and focus will return to the main review window.
-- **Cancel Edits**: In any edit window, press `q` to cancel changes. The edit windows will close, and focus will return to the main review window.
+- **Open the panel**: Press `e` while reviewing to open a single stacked panel that shows the Question above the Answer. The background review window dims so you stay focused.
+- **Navigate fields**: Press `Tab` (in normal or insert mode) to toggle between Question and Answer. Press `L` to lock both panes together so scrolling one scrolls the other.
+- **Track unsaved edits**: The footer shows “• Unsaved” whenever either field has diverged from the original values. It also indicates whether scroll lock is on or off.
+- **Save**: Press `<leader>s` (or click the Apply button) to send both fields back to Anki. The footer shows “Saving…” followed by “Saved to Anki”, and the review window refreshes with the updated content.
+- **Cancel**: Press `q` (or `<Esc>`) to close the panel. If there are unsaved edits you’ll be asked to confirm discarding them; otherwise it closes immediately and restores the review window.
 
 ### Exiting a Session
 

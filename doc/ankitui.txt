@@ -124,10 +124,11 @@ your session will be automatically displayed.
 ------------------------------------------------------------------------------
 3.4. Editing Cards                                      *ankitui-editing*
 
-- To initiate the edit interface, press the key configured for `edit_card` (defaults to `e`) while viewing a card.
-- This will open multiple floating windows, one for each field of the note.
-- To save all changes to Anki, press `<leader>s` in any edit window. The edit windows will close, and focus will return to the main review window.
-- To cancel all changes, press `q` to cancel changes. The edit windows will close, and focus will return to the main review window.
+- Press the key configured for `edit_card` (defaults to `e`) to open the stacked edit panel. It shows the Question above the Answer in a single floating window while dimming the review window underneath.
+- Use `Tab` (normal or insert mode) to toggle focus between Question and Answer. Press `L` to toggle scroll lock, keeping both panes aligned as you scroll.
+- The footer displays the current keymaps and a “• Unsaved” badge whenever either field has changed.
+- Press `<leader>s` (Apply) to save both fields back to Anki. You’ll see “Saving…” followed by “Saved to Anki”, and the review window refreshes with the new content.
+- Press `q` or `<Esc>` to cancel. If there are unsaved edits you’ll be asked to confirm discarding them; otherwise the panel closes immediately and the review window returns to its original brightness.
 
 ------------------------------------------------------------------------------
 3.5. Exiting a Session                                  *ankitui-exit-session*
